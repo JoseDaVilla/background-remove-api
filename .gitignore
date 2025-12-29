@@ -1,0 +1,41 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build / cache
+dist/
+build/
+.cache/
+
+# Logs
+logs/
+*.log
+
+# Temp files (important for image processing)
+tmp/
+temp/
+*.tmp
+
+# Generated images / test files
+out.png
+normalized.png
+test.jpg
+*.jpg
+*.jpeg
+*.png
+*.webp
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
