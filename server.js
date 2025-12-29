@@ -11,14 +11,85 @@ import { pathToFileURL } from "url";
 
 const app = express();
 app.use(cors({ origin: "*" }));
-app.use(express.raw({ type: 'image/*', limit: '10mb' }));
+
+// Memory optimization: Reduce file size limit for low-memory environments
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB (reduced from 10MB)
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: MAX_FILE_SIZE },
 });
 
+// Request queue to prevent multiple concurrent processing (memory spike prevention)
+let isProcessing = false;
+const requestQueue = [];
+
 app.get("/health", (_, res) => res.json({ ok: true }));
+
+// Queue processor
+async function processQueue() {
+  if (requestQueue.length === 0 || isProcessing) return;
+  
+  isProcessing = true;
+  const { req, res, inPath } = requestQueue.shift();
+  
+  try {
+    await processBackgroundRemoval(req, res, inPath);
+  } finally {
+    isProcessing = false;
+    // Force garbage collection if available
+    if (global.gc) {
+      global.gc();
+    }
+    // Process next in queue after a small delay
+    setTimeout(processQueue, 100);
+  }
+}
+
+async function processBackgroundRemoval(req, res, inPath) {
+  try {
+    const fileUrl = pathToFileURL(inPath).href;
+    console.log("Processing with URL:", fileUrl);
+    
+    // Configure removeBackground for low memory usage
+    const outBlob = await removeBackground(fileUrl, {
+      output: {
+        quality: 0.8,
+        format: 'png',
+      },
+    });
+
+    // Convert to buffer
+    const outArrayBuffer = await outBlob.arrayBuffer();
+    const outBuffer = Buffer.from(outArrayBuffer);
+
+    console.log("Success! Returning PNG bytes:", outBuffer.length);
+
+    // Clean up IMMEDIATELY to free memory
+    if (inPath) {
+      try { await unlink(inPath); } catch (e) { console.error("Cleanup error:", e); }
+    }
+
+    res.writeHead(200, {
+      "Content-Type": "image/png",
+      "Content-Length": outBuffer.length,
+      "Cache-Control": "no-store"
+    });
+    res.end(outBuffer, 'binary');
+    
+  } catch (err) {
+    console.error("remove-bg failed:", err?.stack || err);
+    
+    // Clean up on error
+    if (inPath) {
+      try { await unlink(inPath); } catch {}
+    }
+    
+    if (!res.headersSent) {
+      return res.status(500).json({ error: "Background removal failed", message: err?.message });
+    }
+  }
+}
 
 app.post("/remove-bg", upload.single("image"), async (req, res) => {
   let inPath = null;
@@ -30,44 +101,37 @@ app.post("/remove-bg", upload.single("image"), async (req, res) => {
       name: req.file.originalname,
       type: req.file.mimetype,
       size: req.file.size,
+      queueLength: requestQueue.length,
     });
 
-    // Save original file directly (removeBackground handles format conversion)
-    inPath = join(tmpdir(), `bg-in-${randomUUID()}-${req.file.originalname}`);
-    await writeFile(inPath, req.file.buffer);
-
-    const fileUrl = pathToFileURL(inPath).href; // => file:///C:/...
-    console.log("Processing with URL:", fileUrl);
-    
-    const outBlob = await removeBackground(fileUrl);
-
-    // 3) Blob -> Buffer
-    const outArrayBuffer = await outBlob.arrayBuffer();
-    const outBuffer = Buffer.from(outArrayBuffer);
-
-    console.log("Success! Returning PNG bytes:", outBuffer.length);
-
-    // Clean up temp file BEFORE sending response
-    if (inPath) {
-      try { await unlink(inPath); } catch (e) { console.error("Cleanup error:", e); }
+    // Check queue size - reject if too many pending
+    if (requestQueue.length >= 3) {
+      return res.status(503).json({ 
+        error: "Server busy", 
+        message: "Too many requests. Please try again in a moment." 
+      });
     }
 
-    res.writeHead(200, {
-      "Content-Type": "image/png",
-      "Content-Length": outBuffer.length,
-      "Cache-Control": "no-store"
-    });
-    res.end(outBuffer, 'binary');
-  } catch (err) {
-    console.error("remove-bg failed:", err?.stack || err);
+    // Save to temp file
+    inPath = join(tmpdir(), `bg-in-${randomUUID()}-${req.file.originalname}`);
+    await writeFile(inPath, req.file.buffer);
     
-    // Clean up on error too
+    // Clear the buffer from memory immediately
+    req.file.buffer = null;
+
+    // Add to queue
+    requestQueue.push({ req, res, inPath });
+    processQueue();
+
+  } catch (err) {
+    console.error("Upload failed:", err?.stack || err);
+    
     if (inPath) {
       try { await unlink(inPath); } catch {}
     }
     
     if (!res.headersSent) {
-      return res.status(500).json({ error: "Background removal failed", message: err?.message });
+      return res.status(500).json({ error: "Upload failed", message: err?.message });
     }
   }
 });

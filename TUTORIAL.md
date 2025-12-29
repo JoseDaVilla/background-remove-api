@@ -9,7 +9,7 @@ This API removes backgrounds from images using AI. Send an image, get back a PNG
 ## 📡 API Endpoint
 
 ```
-POST http://localhost:3000/remove-bg
+POST https://background-remove-api-ha42.onrender.com/remove-bg
 ```
 
 **For Production:** Replace `localhost:3000` with your deployed server URL.
@@ -43,7 +43,7 @@ import { View, Image, TouchableOpacity, Text, ActivityIndicator } from 'react-na
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 
-const API_URL = 'http://localhost:3000/remove-bg'; // Change for production
+const API_URL = 'https://background-remove-api-ha42.onrender.com/remove-bg'; // Change for production
 
 export default function BackgroundRemover() {
   const [originalImage, setOriginalImage] = useState(null);
@@ -159,7 +159,7 @@ import { View, Image, TouchableOpacity, Text, ActivityIndicator } from 'react-na
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 
-const API_URL = 'http://localhost:3000/remove-bg';
+const API_URL = 'https://background-remove-api-ha42.onrender.com/remove-bg';
 
 export default function BackgroundRemover() {
   const [originalImage, setOriginalImage] = useState(null);
@@ -195,6 +195,7 @@ export default function BackgroundRemover() {
           'Content-Type': 'multipart/form-data',
         },
         responseType: 'blob', // Important for binary data
+        timeout: 60000, // 60 second timeout (processing takes 10-30s)
       });
 
       // 4. Convert blob to base64
@@ -207,7 +208,16 @@ export default function BackgroundRemover() {
 
     } catch (error) {
       console.error('Error:', error);
-      alert('Failed to remove background: ' + error.message);
+      
+      // Handle specific error cases
+      if (error.response?.status === 503) {
+        alert('Server is busy processing other images. Please try again in a moment.');
+      } else if (error.code === 'ECONNABORTED') {
+        alert('Request timed out. The image might be too large or server is slow.');
+      } else {
+        alert('Failed to remove background: ' + error.message);
+      }
+      
       setLoading(false);
     }
   };
@@ -371,7 +381,7 @@ const API_URL = 'http://10.0.2.2:3000/remove-bg';
 
 ```javascript
 const API_URL = __DEV__ 
-  ? 'http://localhost:3000/remove-bg' 
+  ? 'https://background-remove-api-ha42.onrender.com/remove-bg' 
   : 'https://your-api.com/remove-bg';
 ```
 
@@ -394,7 +404,7 @@ Create a reusable hook:
 import { useState } from 'react';
 import axios from 'axios';
 
-const API_URL = 'http://localhost:3000/remove-bg';
+const API_URL = 'https://background-remove-api-ha42.onrender.com/remove-bg';
 
 export const useBackgroundRemoval = () => {
   const [loading, setLoading] = useState(false);
@@ -470,20 +480,22 @@ export const useBackgroundRemoval = () => {
 | Code | Meaning |
 |------|---------|
 | 200  | Success - PNG image returned |
-| 400  | Missing image file |
+| 400  | Missing image file or invalid format |
+| 503  | Server busy - too many requests in queue (retry after 5-10s) |
 | 500  | Server error - check server logs |
 
 ---
 
 ## 💡 Tips & Best Practices
 
-1. **Show Loading State:** Background removal can take 10-20 seconds
-2. **Compress Images:** Reduce image size before upload for faster processing
+1. **Show Loading State:** Background removal can take 10-30 seconds
+2. **Compress Images:** Keep images under 5MB for best results on free tier
 3. **Error Handling:** Always wrap API calls in try-catch
 4. **Background Color:** Add a checkered or colored background to preview transparency
-5. **Timeout:** Set request timeout to 60 seconds
-6. **Retry Logic:** Implement retry for network failures
+5. **Timeout:** Set request timeout to 60 seconds minimum
+6. **Retry Logic:** Implement retry for 503 errors (server busy)
 7. **Image Quality:** Higher quality inputs = better results
+8. **File Size:** Smaller images process faster and use less memory
 
 ---
 
@@ -505,7 +517,7 @@ import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 
 const API_URL = __DEV__ 
-  ? 'http://localhost:3000/remove-bg'
+  ? 'https://background-remove-api-ha42.onrender.com/remove-bg'
   : 'https://your-api.com/remove-bg';
 
 export default function BackgroundRemoverScreen() {
