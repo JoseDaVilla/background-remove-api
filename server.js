@@ -78,7 +78,7 @@ async function processBackgroundRemoval(req, res, inPath) {
     const outBlob = await removeBackground(fileUrl, {
       output: {
         quality: 0.8,
-        format: 'png', // Always output PNG with transparent background
+        format: 'image/png', // Must use full MIME type, not just 'png'
       },
     });
 
