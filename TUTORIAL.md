@@ -21,8 +21,9 @@ POST https://background-remove-api-ha42.onrender.com/remove-bg
 - **Method:** `POST`
 - **Content-Type:** `multipart/form-data`
 - **Field Name:** `image`
-- **Max File Size:** 10MB
-- **Supported Formats:** JPG, PNG, WEBP, etc.
+- **Max File Size:** 5MB
+- **Supported Input Formats:** JPG, JPEG, PNG, WEBP, GIF, BMP, TIFF, HEIC, HEIF
+- **Output Format:** PNG (always with transparent background)
 
 ---
 
@@ -185,7 +186,7 @@ export default function BackgroundRemover() {
       const formData = new FormData();
       formData.append('image', {
         uri: imageUri,
-        type: 'image/jpeg',
+        type: 'image/jpeg', // Can be: image/jpeg, image/png, image/webp, etc.
         name: 'photo.jpg',
       });
 
@@ -461,8 +462,9 @@ export const useBackgroundRemoval = () => {
 
 ### Issue: "Upload failed" or 400 error
 - **Solution:** Verify the FormData field name is `'image'`
-- Check file size is under 10MB
-- Ensure image format is supported
+- Check file size is under 5MB
+- Ensure image format is supported (JPG, PNG, WEBP, GIF, BMP, TIFF, HEIC)
+- Check the error message for specific details
 
 ### Issue: Image not displaying
 - **Solution:** Add `backgroundColor` to Image component to see transparent areas
@@ -480,7 +482,7 @@ export const useBackgroundRemoval = () => {
 | Code | Meaning |
 |------|---------|
 | 200  | Success - PNG image returned |
-| 400  | Missing image file or invalid format |
+| 400  | Missing image file, unsupported format, or file too large (max 5MB) |
 | 503  | Server busy - too many requests in queue (retry after 5-10s) |
 | 500  | Server error - check server logs |
 
